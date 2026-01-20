@@ -15,21 +15,32 @@ import json
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Cargar variables de entorno (local) o secrets (Streamlit Cloud)
+# Cargar variables de entorno (local)
 load_dotenv()
 
 # Obtener API key (primero intenta Streamlit secrets, luego env vars)
 def get_api_key():
-    try:
+    # Primero intenta Streamlit secrets
+    if "OPENROUTER_API_KEY" in st.secrets:
         return st.secrets["OPENROUTER_API_KEY"]
-    except:
-        return os.getenv("OPENROUTER_API_KEY")
+    # Luego variables de entorno
+    return os.getenv("OPENROUTER_API_KEY")
 
-# Configuración de OpenRouter (usa Claude)
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=get_api_key()
-)
+# Cliente se inicializa de forma perezosa
+_client = None
+
+def get_client():
+    global _client
+    if _client is None:
+        api_key = get_api_key()
+        if not api_key:
+            st.error("⚠️ No se encontró OPENROUTER_API_KEY. Configura los Secrets en Streamlit Cloud.")
+            st.stop()
+        _client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key
+        )
+    return _client
 
 # Modelo de Claude con visión
 VISION_MODEL = "anthropic/claude-sonnet-4"
@@ -123,7 +134,7 @@ Responde SOLO con el JSON, sin explicaciones adicionales."""
             }
         })
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=VISION_MODEL,
         messages=[{"role": "user", "content": content}],
         max_tokens=1000
@@ -183,7 +194,7 @@ Responde SOLO con el texto transcrito, sin comentarios tuyos."""
             }
         })
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=VISION_MODEL,
         messages=[{"role": "user", "content": content}],
         max_tokens=4000
@@ -195,7 +206,7 @@ Responde SOLO con el texto transcrito, sin comentarios tuyos."""
 def structure_copy_into_sections(raw_copy):
     """Organiza el copy extraído en secciones numeradas para Lovable."""
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=VISION_MODEL,
         messages=[{
             "role": "user",
